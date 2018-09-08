@@ -14,22 +14,14 @@ class TestBTPeerConnection(TestCase):
         self.obj = BTPeerConnection('145.94.161.215:30000', '145.94.161.215', 30000)
 
     def test__make_msg(self):
-        self.assertEqual(self.obj._make_msg(1, 'abc'), struct.pack('!LL%ds' % 3, 1, 3, 'abc'))
+        self.assertEqual(self.obj._make_msg(1, 'ping'), struct.pack('!LL%ds' % 4, 1, 3, 'ping'))
 
     def test_str_(self):
         self.assertEqual(str(self.obj), '145.94.161.215:30000')
 
-    @unittest.skip("skipping")
     def test_send_data(self):
-        self.obj.send_data(1, 'asdf')
-
-    # todo recv data
-    # @unittest.skip("skipping")
-    def test_recv_data(self):
-        self.assertTrue(self.obj.send_data(2, 'abc'))
-        self.assertEqual(self.obj.recv_data(), (2, 'abc'))
+        self.obj.send_data(1, 'ping')
 
     def test_close(self):
         self.obj.close()
-        self.assertEqual(self.obj.s, None)
-        self.assertEqual(self.obj.sd, None)
+        self.assertEqual(self.obj.sock, None)

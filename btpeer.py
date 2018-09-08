@@ -38,9 +38,12 @@ class BTPeer(object):
         self.max_peers = int(max_peers)
         self.peers = {}
         self.shut_down = False
-        self.handlers = {}
-        self._router = None
+        self.handlers = {1: self.send_pong}
+        self.router = None
         self.logger = setup_logger()
+
+    def send_pong(self, peer_conn, msg_data):
+        peer_conn.send_data(1, 'pong')
 
     def _init_server_host(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -55,12 +58,7 @@ class BTPeer(object):
     def my_id(self, my_id):
         self._my_id = my_id
 
-    @property
-    def router(self):
-        return self.router
-
-    @router.setter
-    def router(self, router):
+    def add_router(self, router):
         """
         Registers a routing function with this peer. The setup of routing is as follows:
         This peer maintains a list of other known peers, the routing function should take
@@ -72,7 +70,7 @@ class BTPeer(object):
         :param router:
         :return: None
         """
-        self._router = router
+        self.router = router
 
     def add_handler(self, msg_type, handler):
         assert len(msg_type) == 4
@@ -125,7 +123,6 @@ class BTPeer(object):
 
     def main_loop(self):
         s = self.make_server_socket(self.server_port)
-        # s.settimeout(2)
 
         self.logger.info('Server started at {}:{}'.format(self.server_host, self.server_port))
 
@@ -150,15 +147,18 @@ class BTPeer(object):
         """
         try:
             host, port = client_sock.getpeername()
+            print "host{}, port{}".format(host, port)
             peer_conn = BTPeerConnection(None, host, port, client_sock)
 
             msg_type, msg_data = peer_conn.recv_data()
+            if not msg_type: self.logger.info('No data from other peers')
+            print "msg_type:{}, msg_data:{}".format(msg_type, msg_data)
             # if msg_type: msg_type = msg_type.upper()
-            if msg_type not in self.handlers and msg_type:
+            if msg_type not in self.handlers:
                 self.logger.info('Message type {}, {} not handled'.format(msg_type, msg_data))
             else:
                 self.logger.info('Handle message type{}, {}'.format(msg_type, msg_data))
-                self.handlers[msg_type] = peer_conn, msg_data
+                self.handlers[msg_type](peer_conn, msg_data)
         except KeyboardInterrupt:
             self.logger.info('KeyboardInterrupt')
             raise
@@ -166,14 +166,50 @@ class BTPeer(object):
         self.logger.info('Disconnecting {}'.format(client_sock.getpeername()))
         peer_conn.close()
 
-    def send_to_peer(self):
-        pass
+    def send_to_peer(self, peer_id, msg_type, msg_data, wait_reply=True):
+        if self.router:
+            next_pid, host, port = self.router(peer_id)
+        if not self.router or not next_pid:
+            self.logger.info("Unable to route to {} to {}".format(msg_type, peer_id))
+            return None
+        return self.connect_and_send(host, port, msg_type, msg_data, pid=next_pid, wait_reply=wait_reply)
 
-    def connect_and_send(self):
-        pass
+    def connect_and_send(self, host, port, msg_type, msg_data, peer_id, wait_reply):
+        msg_reply = []
+        try:
+            peer_conn = BTPeerConnection(peer_id, host, port)
+            peer_conn.send_data(msg_type, msg_data)
+
+            if wait_reply:
+                one_reply = peer_conn.recv_data()
+                while one_reply != (None, None):
+                    msg_reply.append(one_reply)
+                    one_reply = peer_conn.recv_data()
+            peer_conn.close()
+        except KeyboardInterrupt:
+            raise
+
+        return msg_reply
 
     def check_live_peers(self):
-        pass
+        to_delete = []
+        is_connected = False
+        peer_conn = None
+        for peer_id in self.peers:
+            try:
+                peer_host, peer_port = self.peers[peer_id]
+                peer_conn = BTPeerConnection(peer_id, peer_host, peer_port)
+                peer_conn.send_data(1, '')
+                is_connected = True
+            except:
+                to_delete.append(peer_id)
+            # if is_connected: peer_conn.close()
+
+        for peer_id in to_delete:
+            if peer_id in self.peers:
+                del self.peers[peer_id]
+
+        return peer_conn
 
 
 class BTPeerConnection(object):
@@ -183,12 +219,10 @@ class BTPeerConnection(object):
         self.host = host
         self.port = int(port)
         if not client_sock:
-            self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.s.connect((host, int(port)))
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect((host, int(port)))
         else:
-            self.s = client_sock
-
-        self.sd = self.s.makefile('rw', 0)
+            self.sock = client_sock
 
         self.logger = setup_logger()
 
@@ -198,13 +232,14 @@ class BTPeerConnection(object):
     def _make_msg(self, msg_type, msg_data):
         msg_len = len(msg_data)
         msg = struct.pack('!LL%ds' % msg_len, msg_type, msg_len, msg_data)
+        # %d format the first param, (msg_type, msg_len, msg_data)
         return msg
 
     def send_data(self, msg_type, msg_data):
+        print "mymsgtype:{}, data:{}".format(repr(msg_type), msg_data)
         try:
             msg = self._make_msg(msg_type, msg_data)
-            self.sd.write(msg)
-            self.sd.flush()
+            self.sock.send(msg)
         except KeyboardInterrupt:
             self.logger.info('KeyboardInterrupt')
 
@@ -214,19 +249,15 @@ class BTPeerConnection(object):
     def recv_data(self):
         msg_type, msg_data = '', ''
         try:
-            length = self.sd.read(4)
-            if not length:
+            prefix = self.sock.recv(8)
+            if not prefix:
                 return None, None
-            msg_len = struct.unpack('!L', length)
-            msg_type = self.sd.read(4)
-            if not msg_type:
-                return None, None
+            msg_type, msg_len = struct.unpack('!LL', prefix)
 
-            msg_type, = struct.unpack('!L', msg_type)
-
+            # msg data
             msg_data = ''
-            while len(msg_data) != msg_len:
-                data_block = self.sd.read(1)
+            while len(msg_data) < msg_len:
+                data_block = self.sock.recv(1)
                 if not data_block:
                     break
                 msg_data += data_block
@@ -237,6 +268,5 @@ class BTPeerConnection(object):
         return msg_type, msg_data
 
     def close(self):
-        self.s.close()
-        self.s = None
-        self.sd = None
+        self.sock.close()
+        self.sock = None

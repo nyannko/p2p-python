@@ -8,11 +8,11 @@ class TestBTPeer(TestCase):
 
     def setUp(self):
         self.peer_A = BTPeer()
-        self.peer_B = BTPeer()
+        self.peer_B = BTPeer(server_port=30001)
 
     def test_get_my_id(self):
         self.assertEqual(self.peer_A.my_id, '145.94.161.215:30000')
-        self.assertEqual(self.peer_B.my_id, '145.94.161.215:30000')
+        self.assertEqual(self.peer_B.my_id, '145.94.161.215:30001')
 
     def test_set_my_id(self):
         self.peer_A.my_id = '145.94.161.215:30000'
@@ -38,3 +38,11 @@ class TestBTPeer(TestCase):
     def test_max_peers_reached(self):
         self.peer_A.add_peer('145.94.161.215:30000', '145.94.161.215', 30000)
         self.assertTrue(self.peer_A.max_peers_reached())
+
+    def test_check_live_peers(self):
+        self.peer_B.add_peer('145.94.161.215:30000', '145.94.161.215', 30000)
+        peer_conn = self.peer_B.check_live_peers()
+        # Should be empty dict if peer down
+        # self.assertEqual(self.peer_B.peers, {})
+        # print self.peer_B.handlers
+        print peer_conn.recv_data()
