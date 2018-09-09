@@ -4,10 +4,9 @@ PEERNAME = 'NAME'
 LISTPEERS = 'LIST'
 INSERTPEER = 'JOIN'
 QUERY = 'QUER'
-RESPONSE = 'RESP'
+QRESPONSE = 'RESP'
 FILEGET = 'FGET'
 PEERQUIT = 'QUIT'
-
 REPLY = 'REPL'
 ERROR = 'ERRO'
 
@@ -24,7 +23,7 @@ class FilerPeer(BTPeer):
             INSERTPEER: self.__handle_insertpeer,
             PEERNAME: self.__handle_peername,
             QUERY: self.__handle_query,
-            RESPONSE: self.__handle_response,
+            QRESPONSE: self.__handle_qresponse,
             FILEGET: self.__handle_fileget,
             PEERQUIT: self.__handle_peerquit
         }
@@ -75,13 +74,69 @@ class FilerPeer(BTPeer):
         return peer_conn.send_data(REPLY, str(self.my_id))
 
     def __handle_query(self, peer_conn, data):
-        pass
+        peer_id, key, ttl = None, None, None
+        try:
+            peer_id, key, ttl = data.split()
+            peer_conn.send_data(REPLY, 'Query ACK: {}'.format(key))
+        except:
+            self.logger("Invalid query {}:{}".format(peer_conn, data))
+            peer_conn.send_data(ERROR, 'Error: incorrect arguments')
 
-    def __handle_response(self, peer_conn, data):
-        pass
+        t = threading.Thread(target=self.__process_query, args=([peer_id, key, int(ttl)]))
+        t.start()
+
+    def __process_query(self, peer_id, key, ttl):
+        for fname in self.files.keys():
+            if key in fname:
+                fpeer_id = self.files[fname]
+                if not fpeer_id:
+                    fpeer_id = self.my_id
+                host, port = peer_id.split(':')
+                self.connect_and_send(host, int(port), QRESPONSE,
+                                      '{} {}'.format(fname, fpeer_id), pid=peer_id)
+            return
+        if ttl > 0:
+            msg_data = "{} {} {}".format(peer_id, key, ttl - 1)
+            for next_pid in self.get_all_peers():
+                self.send_to_peer(next_pid, QRESPONSE, msg_data)
+
+    def __handle_qresponse(self, peer_conn, data):
+        fname, fpeer_id = data.split()
+        if fname in self.files:
+            self.logger.info("{} has been add to file list".format(fname))
+        else:
+            self.files[fname] = fpeer_id
 
     def __handle_fileget(self, peer_conn, data):
-        pass
+        fname = data
+        if fname not in self.files:
+            self.logger.info("File {} not found".format(fname))
+            peer_conn.send_data(ERROR, 'ERROR: File not found')
+            return
+        try:
+            with open(fname, 'r') as fr:
+                data = fr.read()
+        except:
+            self.logger.info("Error reading file")
+            peer_conn.send_data(ERROR, "Error: Error reading file")
+            return
+        peer_conn.send_data(REPLY, data)
 
-    def __handle_peerquit(self):
+    def __handle_peerquit(self, peer_conn, data):
+        peer_id = data.strip()
+        if peer_id in self.get_all_peers():
+            msg = "QUIT: peer removed: {}".format(peer_id)
+            self.logger.debug(msg)
+            peer_conn.send_data(REPLY, msg)
+            self.remove_peer(peer_id)
+        else:
+            msg = "Peer {} not found".format(peer_id)
+            self.logger.debug(msg)
+            peer_conn.send_data(ERROR, msg)
+
+    def add_local_file(self, file_name):
+        self.files[file_name] = None
+        self.logger.info("Add local file {}".format(file_name))
+
+    def build_peers(self, host, port, hops=1):
         pass
