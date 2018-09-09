@@ -1,10 +1,10 @@
 [http://cs.berry.edu/~nhamid/p2p/](http://cs.berry.edu/~nhamid/p2p/)
 
-#### BTPeer class
+### 1. BTPeer class
 
 Define the attributes and main event handle logic for a peer.
 
-##### 1. Attributes：
+##### a. Attributes：
 * `_my_id`: string
 * `server_host`: string
 * `server_port`: int
@@ -17,7 +17,7 @@ Functions:
 * `max_peers_reached`: max_peers
 
 
-##### 2. Peer logic：
+##### b. Peer logic：
 * `shut_down`: bool
 * `handlers`: list
 * `router`
@@ -29,9 +29,9 @@ Functions:
 * `connect_and_send`: Connect to peers and wait for reply
 * `check_live_peers`: Delete offline peers.
 
-#### BTPeerConnection class
+### 2. BTPeerConnection class
 
-Encapsulates sockets, pack/unpack/chunk messages, catch exceptions
+Encapsulate socket objects, pack/unpack/chunk messages, catch exceptions
 
 Attributes:
 
@@ -41,7 +41,24 @@ Connection logic:
 
 `make_msg`, `send_data`, `recv_data`, `close`
 
+### Debug
 
+```python
+msg = struct.pack('!4sL%ds' % msg_len, msg_type, msg_len, msg_data)
+%d format the first following param, (msg_type, msg_len, msg_data)
+```
 
+### 3. FilerPeer
+
+##### a. Attributes：
+
+* `files`: list
+* `handlers`: dict for handlers
+* `add_router`: add known peers from others 
+
+##### b. Handlers:
+* `__handle_insertpeer(JOIN)`: insert peers to list, return Error if fails
+* `__handle_listpeers(LIST)`: reply with the known peers
+* `__handle_peername(NAME)`: reply with its peer_id 
 
 

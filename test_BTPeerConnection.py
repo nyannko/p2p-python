@@ -14,13 +14,15 @@ class TestBTPeerConnection(TestCase):
         self.obj = BTPeerConnection('145.94.161.215:30000', '145.94.161.215', 30000)
 
     def test__make_msg(self):
-        self.assertEqual(self.obj._make_msg(1, 'ping'), struct.pack('!LL%ds' % 4, 1, 3, 'ping'))
+        # (msgtype(4 char), msg_len, msg(%d))
+        self.assertEqual(self.obj._make_msg('ping', 'Are you here?'),
+                         struct.pack('!4sL%ds' % 13, 'ping', 13, 'Are you here?'))
 
     def test_str_(self):
         self.assertEqual(str(self.obj), '145.94.161.215:30000')
 
     def test_send_data(self):
-        self.obj.send_data(1, 'ping')
+        self.obj.send_data('ping', 'Are you here?')
 
     def test_close(self):
         self.obj.close()

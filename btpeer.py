@@ -4,7 +4,7 @@ import struct
 import threading
 
 
-def setup_logger(logger_name=None, level=logging.DEBUG):
+def setup_logger(logger_name=__name__, level=logging.DEBUG):
     logger = logging.getLogger(logger_name)
     logger.setLevel(level)
     ch = logging.StreamHandler()
@@ -19,7 +19,7 @@ def setup_logger(logger_name=None, level=logging.DEBUG):
 class BTPeer(object):
 
     def __init__(self, my_id=None, server_host=None, server_port=30000, max_peers=1):
-
+        print "my_id{}, server_host{}, server_port{}, max_peers{}".format(my_id, server_host, server_port, max_peers)
         # todo too complicated
         if server_host:
             self.server_host = server_host
@@ -38,9 +38,9 @@ class BTPeer(object):
         self.max_peers = int(max_peers)
         self.peers = {}
         self.shut_down = False
-        self.handlers = {1: self.send_pong}
+        self.handlers = {}
         self.router = None
-        self.logger = setup_logger()
+        self.logger = setup_logger(self.__class__.__name__)
 
     def send_pong(self, peer_conn, msg_data):
         peer_conn.send_data(1, 'pong')
@@ -142,8 +142,6 @@ class BTPeer(object):
     def _handle_peer(self, client_sock):
         """
         Dispatches message from socket connections
-        :param sock:
-        :return:
         """
         try:
             host, port = client_sock.getpeername()
@@ -153,11 +151,11 @@ class BTPeer(object):
             msg_type, msg_data = peer_conn.recv_data()
             if not msg_type: self.logger.info('No data from other peers')
             print "msg_type:{}, msg_data:{}".format(msg_type, msg_data)
-            # if msg_type: msg_type = msg_type.upper()
+            if msg_type: msg_type = msg_type.upper()
             if msg_type not in self.handlers:
                 self.logger.info('Message type {}, {} not handled'.format(msg_type, msg_data))
             else:
-                self.logger.info('Handle message type{}, {}'.format(msg_type, msg_data))
+                self.logger.info('Handle message type {}, {}'.format(msg_type, msg_data))
                 self.handlers[msg_type](peer_conn, msg_data)
         except KeyboardInterrupt:
             self.logger.info('KeyboardInterrupt')
@@ -231,14 +229,13 @@ class BTPeerConnection(object):
 
     def _make_msg(self, msg_type, msg_data):
         msg_len = len(msg_data)
-        msg = struct.pack('!LL%ds' % msg_len, msg_type, msg_len, msg_data)
+        msg = struct.pack('!4sL%ds' % msg_len, msg_type, msg_len, msg_data)
         # %d format the first param, (msg_type, msg_len, msg_data)
         return msg
 
     def send_data(self, msg_type, msg_data):
-        print "mymsgtype:{}, data:{}".format(repr(msg_type), msg_data)
         try:
-            msg = self._make_msg(msg_type, msg_data)
+            msg = self._make_msg(msg_type, str(msg_data))
             self.sock.send(msg)
         except KeyboardInterrupt:
             self.logger.info('KeyboardInterrupt')
@@ -252,7 +249,7 @@ class BTPeerConnection(object):
             prefix = self.sock.recv(8)
             if not prefix:
                 return None, None
-            msg_type, msg_len = struct.unpack('!LL', prefix)
+            msg_type, msg_len = struct.unpack('!4sL', prefix)
 
             # msg data
             msg_data = ''
