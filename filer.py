@@ -139,4 +139,39 @@ class FilerPeer(BTPeer):
         self.logger.info("Add local file {}".format(file_name))
 
     def build_peers(self, host, port, hops=1):
-        pass
+        """
+        Attempt to build the local peer list up to the limit stored by
+	    self.maxpeers, using a simple depth-first search given an
+	    initial host and port as starting point. The depth of the
+	    search is limited by the hops parameter.
+        """
+
+        if self.max_peers_reached() or not hops:
+            return
+        peer_id = None
+        self.logger.info("Building peers from {}:{}".format(host, port))
+
+        # __handle_peername
+        _, peer_id = self.connect_and_send(host, port, PEERNAME, '')[0]
+        self.logger.info("Contacted {}".format(peer_id))
+
+        # __handle_insertpeer
+        resp = self.connect_and_send(host, port, INSERTPEER, "{} {} {}"
+                                     .format(self.my_id, self.server_host, self.server_port))[0]
+
+        if resp[0] != REPLY or peer_id not in self.get_all_peers():
+            return
+
+        self.add_peer(peer_id, host, port)
+
+        # do recursive depth first search to add more peers
+        # __handle_listpeers
+        # "REPLY: {} {} {}".format(peer_id, host, port), get all peer id
+        resp = self.connect_and_send(host, port, LISTPEERS, '', peer_id=peer_id)
+        if len(resp) > 1:
+            resp.reverse()
+            resp.pop()  # get rid of header count reply
+            while len(resp):
+                next_pid, host, port = resp.pop()[1].split()
+                if next_pid != self.my_id:
+                    self.build_peers(host, port, hops - 1)

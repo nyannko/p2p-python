@@ -60,5 +60,11 @@ msg = struct.pack('!4sL%ds' % msg_len, msg_type, msg_len, msg_data)
 * `__handle_insertpeer(JOIN)`: insert peers to list, return Error if fails
 * `__handle_listpeers(LIST)`: reply with the known peers
 * `__handle_peername(NAME)`: reply with its peer_id 
+* `__handle_query(QUER)`
+* `__handle_qresponse(RESP)`
+* `__handle_fileget(FGET)`
+* `__handle_peerquit(QUIT)`
+* `build_peers`: handle reaction from peers
 
+![](peers.jpg)
 
