@@ -20,3 +20,6 @@ class TestFilerPeer(TestCase):
     def test__handle_listpeers(self):
         data = ""
         self.assertTrue(self.conn.send_data('LIST', data))
+
+    def test__handle_query(self):
+        pass

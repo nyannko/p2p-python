@@ -1,7 +1,5 @@
 from unittest import TestCase
 
-import unittest
-
 from btpeer import BTPeerConnection
 from btpeer import BTPeer
 import struct

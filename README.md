@@ -33,11 +33,11 @@ Functions:
 
 Encapsulate socket objects, pack/unpack/chunk messages, catch exceptions
 
-Attributes:
+##### a. Attributes：
 
 `id`, `sock`
 
-Connection logic:
+##### b. Connection logic:
 
 `make_msg`, `send_data`, `recv_data`, `close`
 
