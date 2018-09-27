@@ -1,3 +1,4 @@
+import time
 import socket
 import logging
 import struct
@@ -18,7 +19,7 @@ def setup_logger(logger_name=__name__, level=logging.DEBUG):
 
 class BTPeer(object):
 
-    def __init__(self, my_id=None, server_host=None, server_port=30000, max_peers=1):
+    def __init__(self, my_id=None, server_host=None, server_port=30000, max_peers=2):
         print "my_id{}, server_host{}, server_port{}, max_peers{}".format(my_id, server_host, server_port, max_peers)
         # todo too complicated
         if server_host:
@@ -41,6 +42,19 @@ class BTPeer(object):
         self.handlers = {}
         self.router = None
         self.logger = setup_logger(self.__class__.__name__)
+
+    def __run_stabilizer(self, stabilizer, delay):
+        while not self.shut_down:
+            stabilizer()
+            time.sleep(delay)
+
+    def start_stabilizer(self, stabilizer, delay):
+        """ Registers and starts a stabilizer function with this peer.
+        The function will be activated every <delay> seconds.
+        """
+        t = threading.Thread(target=self.__run_stabilizer,
+                             args=[stabilizer, delay])
+        t.start()
 
     def send_pong(self, peer_conn, msg_data):
         peer_conn.send_data(1, 'pong')
@@ -172,7 +186,7 @@ class BTPeer(object):
             return None
         return self.connect_and_send(host, port, msg_type, msg_data, pid=next_pid, wait_reply=wait_reply)
 
-    def connect_and_send(self, host, port, msg_type, msg_data, peer_id, wait_reply):
+    def connect_and_send(self, host, port, msg_type, msg_data, peer_id=None, wait_reply=True):
         msg_reply = []
         try:
             peer_conn = BTPeerConnection(peer_id, host, port)
